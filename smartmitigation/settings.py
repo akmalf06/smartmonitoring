@@ -27,7 +27,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-bw)oviu6bd-a04tqz*m(0vt!$a9%&zm&a7wnx2heecyscd%6f('
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
 ALLOWED_HOSTS = [
     'https://smartmitigation.herokuapp.com/',
