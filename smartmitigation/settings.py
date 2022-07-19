@@ -86,10 +86,10 @@ WSGI_APPLICATION = 'smartmitigation.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'smart-monitoring',
-        'USER': 'root',
-        'PASSWORD': '',
-        'HOST': 'localhost',
+        'NAME': 'u1149147_smitigationdb',
+        'USER': 'u1149147_smartmuser',
+        'PASSWORD': 'V]Q3!6lSTKU$',
+        'HOST': '156.67.211.19',
         'PORT': '3306',
     }
 }
