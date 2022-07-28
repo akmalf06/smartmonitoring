@@ -11,7 +11,7 @@ from django.db import connection
 def getPoints(date_start=None, date_end=None):
     data_air_df = pd.DataFrame(columns=['deviceid', 'latitude', 'longitude', 'nama', 'average_distance', 'average_temp'])
     with connection.cursor() as cur:
-        if (date_start is not None) or (date_end is None):
+        if (date_start is None) or (date_end is None):
             cur.execute("""
             SELECT 
                 ds.sungai_deviceid,
