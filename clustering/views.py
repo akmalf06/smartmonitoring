@@ -95,6 +95,8 @@ def index(request):
     date_start = request.GET.get('date_start', None)
     date_end = request.GET.get('date_end', None)
     data_air_df = getPoints(date_start=date_start, date_end=date_end)
+    if data_air_df.empty:
+        return JsonResponse([], safe=False)
     data_air_x = data_air_df.iloc[:,[4,5]].to_numpy()
     silhoutte_score_list = []
     for i in range(2, 11):
