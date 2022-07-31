@@ -250,8 +250,8 @@ def rnnprediction(request):
     y_pred_final = scaler.inverse_transform(pred_input).flatten()
     x_pred_final = np.array(range(0,len(y_pred_final)))
     prediction = np.column_stack((x_pred_final, y_pred_final)).tolist()
-    return JsonResponse({
-        "time_step": 7,
+    return JsonResponse({ 
+        "time_step": 7, 
         "mse": mse,
         "input_data": data_air_input,
         "test_data": test_data,
