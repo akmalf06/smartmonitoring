@@ -1,3 +1,4 @@
+from cgi import test
 from django.shortcuts import render
 import numpy as np
 import pandas as pd
@@ -5,8 +6,12 @@ from sklearn.cluster import KMeans
 import json
 import datetime
 from sklearn.metrics import silhouette_score
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.db import connection
+from tensorflow.keras.models import load_model
+from sklearn.metrics import mean_squared_error
+from sklearn.preprocessing import MinMaxScaler
+import os
 
 def getPoints(date_start=None, date_end=None):
     data_air_df = pd.DataFrame(columns=['deviceid', 'latitude', 'longitude', 'nama', 'average_distance', 'average_temp'])
@@ -90,8 +95,107 @@ def getPoints(date_start=None, date_end=None):
                 data_air_df.loc[len(data_air_df)] = [r[0], r[1], r[2], r[3], r[4], r[5]]
     return data_air_df
 
+def prepDataRNN(datain, time_step):
+    # 1. y-array  
+    # Ambil semua index yang akan dijadikan label
+    y_indices = np.arange(start=time_step, stop=len(datain), step=time_step)
+    y_tmp = datain[y_indices]
+    
+    # 2. X-array  
+    # Jumlah baris x harus sama dengan jumlah baris pada y atau label
+    rows_X = len(y_tmp)
+    # Ambil semua nilai X
+    X_tmp = datain[range(time_step*rows_X)]
+    # Reshape ke dalam bentuk sesuai time_step
+    X_tmp = np.reshape(X_tmp, (rows_X, time_step, 1))
+    return X_tmp, y_tmp
+
+def getPointsRNN(deviceid, date_start=None, date_end=None):
+    data_air_df = pd.DataFrame(columns=['id', 'distance', 'temp', 'date'])
+    with connection.cursor() as cur:
+        if (date_start is None) or (date_end is None):
+            cur.execute("""
+            SELECT 
+                da.id,
+                da.distance,
+                da.temp,
+                da.date
+            FROM master_sungai ds
+            JOIN 
+            (SELECT 
+                id,
+                deviceid, 
+                distance,
+                temp,
+                date
+            FROM (
+                SELECT 
+                    id, 
+                    deviceid, 
+                    date, 
+                    temp, 
+                    distance, 
+                    @deviceid_rank:=IF(@current_deviceid = deviceid, @deviceid_rank + 1, 1) AS devicerank, 
+                    @current_deviceid:=deviceid
+                FROM (
+                    SELECT * 
+                    FROM data_airdb
+                    ORDER BY id DESC
+                ) data_air_sorted
+                JOIN (SELECT @current_deviceid:=NULL, @deviceid_rank:=0) AS vars
+                ORDER BY id DESC
+            ) data_ranked
+            WHERE devicerank <= 100) da
+            ON da.deviceid = ds.sungai_deviceid
+            WHERE da.deviceid = %s;
+            """, (deviceid,))
+            for r in cur.fetchall():
+                data_air_df.loc[len(data_air_df)] = [r[0], r[1], r[2], r[3]]
+        else:
+            cur.execute("""
+            SELECT 
+                da.id,
+                da.distance,
+                da.temp,
+                da.date
+            FROM master_sungai ds
+            JOIN 
+            (SELECT 
+                id,
+                deviceid, 
+                distance,
+                temp,
+                date
+            FROM (
+                SELECT 
+                    id, 
+                    deviceid, 
+                    date, 
+                    temp, 
+                    distance, 
+                    @deviceid_rank:=IF(@current_deviceid = deviceid, @deviceid_rank + 1, 1) AS devicerank, 
+                    @current_deviceid:=deviceid
+                FROM (
+                    SELECT * 
+                    FROM data_airdb
+                    WHERE date BETWEEN %s AND %s
+                    ORDER BY id DESC
+                ) data_air_sorted
+                JOIN (SELECT @current_deviceid:=NULL, @deviceid_rank:=0) AS vars
+                ORDER BY id DESC
+            ) data_ranked ) da
+            ON da.deviceid = ds.sungai_deviceid
+            WHERE da.deviceid = %s;
+            """, (date_start, date_end, deviceid,))
+            for r in cur.fetchall():
+                data_air_df.loc[len(data_air_df)] = [r[0], r[1], r[2], r[3]]
+    return data_air_df
+
 # Create your views here.
 def index(request):
+    return HttpResponse("<html><body>SMART MITIGATION API</body></html>")
+
+def cluster(request):
     date_start = request.GET.get('date_start', None)
     date_end = request.GET.get('date_end', None)
     data_air_df = getPoints(date_start=date_start, date_end=date_end)
@@ -114,3 +218,42 @@ def index(request):
     for cluster_label in range(0, optimal_k):
         result_list.append(data_air_df[data_air_df.label==cluster_label].sort_values(by=['deviceid']).to_dict(orient='records'))
     return JsonResponse(result_list, safe=False)
+
+def rnnprediction(request):
+    deviceid = request.GET.get('deviceid', None)
+    if(deviceid is None):
+        return JsonResponse({
+            'success': 'false',
+            'message': 'Deviceid tidak diberikan'    
+        }, safe=False)
+    date_start = request.GET.get('date_start', None)
+    date_end = request.GET.get('date_end', None)
+    df = getPointsRNN(deviceid, date_start, date_end)
+    if(df.shape[0] < 7):
+        return JsonResponse({
+            'success': 'false',
+            'message': 'Data setidaknya berjumlah 7 record'    
+        }, safe=False)
+    data_air_df=df[['date', 'distance']].copy()
+    data_air_input = data_air_df.to_numpy().tolist()
+    X_raw_input=data_air_df[['distance']]
+    scaler = MinMaxScaler()
+    X_scaled=scaler.fit_transform(X_raw_input)
+    X_input, y_input = prepDataRNN(X_scaled, 7)
+    modelPath = os.path.abspath(os.path.join(os.path.dirname(__file__), 'RNNModel'))
+    model = load_model(modelPath)
+    pred_input = model.predict(X_input)
+    mse = mean_squared_error(y_input, pred_input)
+    y_input_final = scaler.inverse_transform(y_input).flatten()
+    x_input_final = np.array(range(0,len(y_input_final)))
+    test_data = np.column_stack((x_input_final, y_input_final)).tolist() 
+    y_pred_final = scaler.inverse_transform(pred_input).flatten()
+    x_pred_final = np.array(range(0,len(y_pred_final)))
+    prediction = np.column_stack((x_pred_final, y_pred_final)).tolist()
+    return JsonResponse({
+        "time_step": 7,
+        "mse": mse,
+        "input_data": data_air_input,
+        "test_data": test_data,
+        "prediction": prediction
+    }, safe=False)

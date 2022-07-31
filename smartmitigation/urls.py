@@ -18,6 +18,7 @@ from django.urls import path
 from clustering import views
 
 urlpatterns = [
-    path('cluster/', views.index, name='clustering'),
-    path('admin/', admin.site.urls),
+    path('cluster/', views.cluster, name='clustering'),
+    path('rnnprediction/', views.rnnprediction, name='rnnprediction'),
+    path('', views.index, name='smtindex'),
 ]
