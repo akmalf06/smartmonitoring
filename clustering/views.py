@@ -190,6 +190,23 @@ def getPointsRNN(deviceid, date_start=None, date_end=None):
                 data_air_df.loc[len(data_air_df)] = [r[0], r[1], r[2], r[3]]
     return data_air_df
 
+def getNSecondPrediction(df_air, model, second=300):
+    n_iteration = second//2
+    last_7_df = df_air.tail(7).copy()
+    x_pred_final = []
+    y_pred_final = []
+    for i in range(n_iteration):
+        X=last_7_df.tail(7)[['distance']].copy()
+        scaler = MinMaxScaler()
+        X_scaled=scaler.fit_transform(X)
+        X_ready = X_scaled[range(7)]
+        X_ready = np.reshape(X_ready, (1, 7, 1))
+        pred_input = model.predict(X_ready, verbose=False)
+        x_pred_final += scaler.inverse_transform(pred_input).flatten().tolist()
+        last_7_df.loc[len(last_7_df)] = [i, x_pred_final[-1]]
+        y_pred_final.append(i)
+    return x_pred_final, y_pred_final
+
 # Create your views here.
 def index(request):
     return HttpResponse("<html><body>SMART MITIGATION API</body></html>")
@@ -227,6 +244,7 @@ def rnnprediction(request):
         }, safe=False)
     date_start = request.GET.get('date_start', None)
     date_end = request.GET.get('date_end', None)
+    second = request.GET.get('second', 300)
     df = getPointsRNN(deviceid, date_start, date_end)
     if(df.shape[0] < 7):
         return JsonResponse({
@@ -249,10 +267,13 @@ def rnnprediction(request):
     y_pred_final = scaler.inverse_transform(pred_input).flatten()
     x_pred_final = np.array(range(0,len(y_pred_final)))
     prediction = np.column_stack((x_pred_final, y_pred_final)).tolist()
+    x_prediction, y_prediction = getNSecondPrediction(data_air_df, model, second)
+    prediction_second = list(zip(x_prediction, y_prediction))
     return JsonResponse({ 
         "time_step": 7, 
         "mse": mse,
         "input_data": data_air_input,
         "test_data": test_data,
-        "prediction": prediction
+        "prediction": prediction,
+        "prediction_second": prediction_second
     }, safe=False)
