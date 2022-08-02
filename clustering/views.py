@@ -245,6 +245,7 @@ def rnnprediction(request):
     date_start = request.GET.get('date_start', None)
     date_end = request.GET.get('date_end', None)
     second = request.GET.get('second', 300)
+    second = int(second)
     df = getPointsRNN(deviceid, date_start, date_end)
     if(df.shape[0] < 7):
         return JsonResponse({
