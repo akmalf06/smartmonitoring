@@ -2,8 +2,7 @@ from django.shortcuts import render
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
-import json
-import datetime
+import math
 from sklearn.metrics import silhouette_score
 from django.http import HttpResponse, JsonResponse
 from django.db import connection
@@ -278,3 +277,41 @@ def rnnprediction(request):
         "prediction": prediction,
         "prediction_second": prediction_second
     }, safe=False)
+
+def pointByClass(request):
+    date_start = request.GET.get('date_start', None)
+    date_end = request.GET.get('date_end', None)
+    data_air_df = getPoints(date_start=date_start, date_end=date_end)
+    result = {}
+    temp_df = data_air_df[data_air_df['average_distance']<=5].copy()
+    bottom_limit = 0
+    upper_limit = 5
+    while upper_limit <= 35:
+        key = ''
+        if upper_limit == 5:
+            temp_df = data_air_df[data_air_df['average_distance'] <= 5].copy()
+            key = 'le5'
+        if upper_limit == 35:
+            temp_df = data_air_df[data_air_df['average_distance'] > 30].copy()
+            key = 'm30'
+        if (upper_limit > 5) and (upper_limit < 35):
+            temp_df = data_air_df[(data_air_df['average_distance'] > bottom_limit) & (data_air_df['average_distance'] <= upper_limit)].copy()
+            key = "le{}m{}".format(str(bottom_limit), str(upper_limit))
+        n = temp_df.shape[0]
+        name = None
+        for index, row in temp_df.iterrows():
+            if name is None:
+                name = str(row['deviceid'])
+            else:
+                name = name + ', ' + str(row['deviceid'])
+        distance_mean = temp_df['average_distance'].mean() if not math.isnan(temp_df['average_distance'].mean()) else 0
+        temp_mean = temp_df['average_temp'].mean() if not math.isnan(temp_df['average_temp'].mean()) else 0
+        result[key] = {
+            'total': n,
+            'distance_mean': distance_mean,
+            'temp_mean': temp_mean,
+            'deviceids': name
+        }
+        bottom_limit += 5
+        upper_limit += 5
+    return JsonResponse(result)

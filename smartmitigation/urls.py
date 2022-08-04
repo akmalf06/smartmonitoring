@@ -20,5 +20,6 @@ from clustering import views
 urlpatterns = [
     path('cluster/', views.cluster, name='clustering'),
     path('rnnprediction/', views.rnnprediction, name='rnnprediction'),
+    path('pointbyclass/', views.pointByClass, name='pointByClass'),
     path('', views.index, name='smtindex'),
 ]
