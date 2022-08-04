@@ -282,6 +282,8 @@ def pointByClass(request):
     date_start = request.GET.get('date_start', None)
     date_end = request.GET.get('date_end', None)
     data_air_df = getPoints(date_start=date_start, date_end=date_end)
+    if data_air_df.empty:
+        return JsonResponse({}, safe=False)
     result = {}
     temp_df = data_air_df[data_air_df['average_distance']<=5].copy()
     bottom_limit = 0
@@ -296,7 +298,7 @@ def pointByClass(request):
             key = 'm30'
         if (upper_limit > 5) and (upper_limit < 35):
             temp_df = data_air_df[(data_air_df['average_distance'] > bottom_limit) & (data_air_df['average_distance'] <= upper_limit)].copy()
-            key = "le{}m{}".format(str(bottom_limit), str(upper_limit))
+            key = "m{}le{}".format(str(bottom_limit), str(upper_limit))
         n = temp_df.shape[0]
         name = None
         for index, row in temp_df.iterrows():
